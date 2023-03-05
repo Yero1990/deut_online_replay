@@ -88,9 +88,11 @@ TH2F* combine_2dhistos(int run_min=0, int run_max=99999, TString hist2d_name="ra
 
       data_file->GetObject(Form("%s", hist2d_name.Data()), myhist2d);
 
+      cout << "data_file read properly" << endl;
       // only for 1st run, clone histogram to the total
       if(cnt==0) { myhist2d_total = (TH2F*)myhist2d->Clone(hist2d_name.Data()); }
 
+      cout << "passed L1" << endl;
       // add subseqquent histos
       if(cnt>0) { myhist2d_total->Add(myhist2d); }
       
@@ -101,23 +103,27 @@ TH2F* combine_2dhistos(int run_min=0, int run_max=99999, TString hist2d_name="ra
     
   } // end readlines
 
+  cout << "passed L2" << endl;
+
   return myhist2d_total;
 
 }
 
 
-TH2F* get_simc_2d_histos(TString setting="", TString hist_type=""){
+TH2F* get_simc_2d_histos(TString setting="pm120", TString hist_type="rad_corr_ratio"){
 
   // Brief: this function gets specific histogram from SIMC for
   // radiative corrections and phase space, for a given deuteron kin
   // the arguments are:  setting="pm120", "pm580", "pm800", "pm900"
   // hist_type="norad", "rad", "rad_corr_ratio" , "phase_space", 
+
+  cout << "calling get_simc_2d_histos()" << endl;
   
   // simc no_rad / rad 2D histo
+  TH2F *dummy = 0;
   TH2F *H2_Pm_vs_thrq_simc_rad = 0;
   TH2F *H2_Pm_vs_thrq_simc_norad = 0;
   TH2F *H2_Pm_vs_thrq_simc_ps = 0; //phase space
-
   TH2F *H2_Pm_vs_thrq_simc_ratio = 0; // for nonrad/rad ratio
   
   // define generic rootfile name to path
@@ -133,15 +139,19 @@ TH2F* get_simc_2d_histos(TString setting="", TString hist_type=""){
   TFile *data_file_rad =  new TFile(root_file_path_rad.Data(), "READ");
   TFile *data_file_norad =  new TFile(root_file_path_norad.Data(), "READ");
 
-  // Retrieve histograms
+ 
+  cout << Form("Read data file . . . %s",root_file_path_rad.Data()) << endl;
+  
+    // Retrieve histograms
   data_file_rad->cd();
   data_file_rad->GetObject("kin_plots/H_Pm_vs_thrq", H2_Pm_vs_thrq_simc_rad);  //radiative
 
+  cout << Form("Read data file . . . %s",root_file_path_norad.Data()) << endl;
   data_file_norad->cd();
-  
   data_file_norad->GetObject("kin_plots/H_Pm_vs_thrq", H2_Pm_vs_thrq_simc_norad); //non-radiative
   data_file_norad->GetObject("kin_plots/H_Pm_vs_thrq_ps", H2_Pm_vs_thrq_simc_ps); //non-radiative phase-space
 
+  
   int xnbins = H2_Pm_vs_thrq_simc_norad->GetXaxis()->GetNbins();
   float xmin = H2_Pm_vs_thrq_simc_norad->GetXaxis()->GetXmin();
   float xmax = H2_Pm_vs_thrq_simc_norad->GetXaxis()->GetXmax();
@@ -149,9 +159,12 @@ TH2F* get_simc_2d_histos(TString setting="", TString hist_type=""){
   int ynbins = H2_Pm_vs_thrq_simc_norad->GetYaxis()->GetNbins();
   float ymin = H2_Pm_vs_thrq_simc_norad->GetYaxis()->GetXmin();
   float ymax = H2_Pm_vs_thrq_simc_norad->GetYaxis()->GetXmax();
+  
 
+  H2_Pm_vs_thrq_simc_ratio = new TH2F("H2_Pm_vs_thrq_simc_ratio", "SIMC Y_{norad}/Y_{rad}; Y_{norad}/Y_{rad}; #theta_{rq} [deg] ", xnbins, xmin, xmax, ynbins, ymin, ymax);
+  H2_Pm_vs_thrq_simc_ratio->Divide(H2_Pm_vs_thrq_simc_norad, H2_Pm_vs_thrq_simc_rad);
 
-
+      
   if(hist_type=="norad"){
     return H2_Pm_vs_thrq_simc_norad;
   }
@@ -161,19 +174,24 @@ TH2F* get_simc_2d_histos(TString setting="", TString hist_type=""){
   }
     
   else if(hist_type=="rad_corr_ratio"){
-    H2_Pm_vs_thrq_simc_norad->Divide(H2_Pm_vs_thrq_simc_rad);
-    return H2_Pm_vs_thrq_simc_norad;
+    return H2_Pm_vs_thrq_simc_ratio;
   }
 
   else if(hist_type=="phase_space"){
     return  H2_Pm_vs_thrq_simc_ps;
   }
 
-  else return NULL;
+  else{
+    return dummy;
+  }
+  
+  
+
 }
 
 void project2d_deut( TH2F *hist2d=0, TString setting="", Bool_t display_plots=0, Bool_t apply_radiative_corr=0 ){
 
+  cout << "calling project2d_deut" << endl;
   //avoid display
   gROOT->SetBatch(kTRUE);
   
@@ -184,40 +202,86 @@ void project2d_deut( TH2F *hist2d=0, TString setting="", Bool_t display_plots=0,
 
     For now is specific for deuteron, but can easily be modified for other use
    */
-  
+
+  // set base filename
   TString basename=Form("deut_stats_monitoring_setting_%s_", setting.Data());
   
   // Set basefilename to save projections to root file
   TString ofile="DEUT_OUTPUT/ROOT/" + basename + "output.root";
   
-  TFile *fout = new TFile(ofile.Data(), "RECREATE");
+  TFile *fout = new TFile(ofile.Data(),"RECREATE");
+
 
   //set output names of projections to be saved to divided canvas
   TString fout_2dHist      = "DEUT_OUTPUT/PDF/" + basename + "2Dhisto.pdf";
   TString fout_projHist    = "DEUT_OUTPUT/PDF/" + basename + "projY.pdf";
   TString fout_projHistErr = "DEUT_OUTPUT/PDF/" + basename + "projY_relError.pdf";
+  TString fout_projsimcRadCorr = "DEUT_OUTPUT/PDF/" + basename + "projY_simcRadCorr.pdf";
   
   // set global title/label sizes
   gStyle->SetTitleFontSize(0.1);
   gStyle->SetLabelSize(.1, "XY");
   gStyle->SetTitleY(1.01); // offset title vertically
 
-  //TH2F *hist2d = new TH2F("hist2d", "", 30,-15,15, 30, -15,15);
+  // define external 2d histogrmas
+  TH2F *hist2d_Pm_vs_thrq_simc_ratio = 0; //non-radiative / radiative ratio
+  TH2F *hist2d_Pm_vs_thrq_simc_ps = 0;  //phase space
+  TH2F *hist2d_Pm_vs_thrq_data_radcorr = 0;  //radiative corr. data
+  TH2F *hist2d_Pm_vs_thrq_data_Xsec = 0;  // data cross sections
+ 
+  cout << "Retrieve histograms get_simc_2d_histos() func. . . " << endl;
+
+  hist2d_Pm_vs_thrq_simc_ratio = get_simc_2d_histos(setting.Data(), "rad_corr_ratio");
+  hist2d_Pm_vs_thrq_simc_ps    = get_simc_2d_histos(setting.Data(), "phase_space");
 
 
+  //Apply radiative corrections
+  hist2d_Pm_vs_thrq_data_radcorr = (TH2F*)hist2d->Clone();
+  hist2d_Pm_vs_thrq_data_radcorr->Multiply(hist2d_Pm_vs_thrq_simc_ratio);
+
+  //scale by total charge and track inefficiencies
+  
+  cout << "Retrieved 2d histos . . . " << endl;
+  
   // get total number of x,y bins of hist2d
   int nxbins = hist2d->GetXaxis()->GetNbins();
   int nybins = hist2d->GetYaxis()->GetNbins();
 
+
   hist2d->GetYaxis()->SetTitle("P_{m}, Missing Momentum [GeV/c]");
   hist2d->GetXaxis()->SetTitle("Recoil Angle, #theta_{rq} [deg]");
 
+  cout << "Set title for hist2d . . . " << endl;
+
+  hist2d_Pm_vs_thrq_simc_ratio->GetYaxis()->SetTitle("P_{m}, Missing Momentum [GeV/c]");
+  hist2d_Pm_vs_thrq_simc_ratio->GetXaxis()->SetTitle("Recoil Angle, #theta_{rq} [deg]");
+  hist2d_Pm_vs_thrq_simc_ratio->SetTitle("SIMC Y_{norad}/Y_{rad}");
+
+
   // plot 2d histogra
-  TCanvas *c0 = new TCanvas("c0", "", 1200,800);
-  c0->cd();
+  TCanvas *c0 = new TCanvas("c0", "", 1500,1500);
+  c0->Divide(2,2);
+
+  c0->cd(1);
   hist2d->Draw("contz");
-  hist2d->Write();
+ 
   
+  c0->cd(2);
+  gPad->Modified(); gPad->Update();
+  hist2d_Pm_vs_thrq_simc_ratio->Draw("colz");
+
+  c0->cd(3);
+  gPad->Modified(); gPad->Update();
+  hist2d_Pm_vs_thrq_simc_ps->Draw("colz");
+
+  c0->cd(4);
+  gPad->Modified(); gPad->Update();
+  hist2d_Pm_vs_thrq_data_radcorr->Draw("colz");
+  
+  hist2d->Write();
+  hist2d_Pm_vs_thrq_simc_ratio->Write();
+
+
   // --- define variables for calculative/plotting of relative stats. error on Pmiss (need to reset vector per projection bin) ---
   vector<double> y_val;       // this will be set to 0 (as reference)
   vector<double> y_err;       // relative error on pmiss bin counts
@@ -247,20 +311,25 @@ void project2d_deut( TH2F *hist2d=0, TString setting="", Bool_t display_plots=0,
     xc = round(sqrt(nxbins));
   }
   
-  //cout << Form("rounded area = (%d, %d) ", yc, xc) << endl;
+  // define canvas for projecting 2d histograms
   TCanvas *c1 = new TCanvas("c1", "Data Missing Momenta ProjY", 1400,1100);
   TCanvas *c2 = new TCanvas("c2", "Data Missing Momenta Relative Error", 1400,1100);
-  
+  TCanvas *c3 = new TCanvas("c3", "SIMC Radiative Corrections", 1400,1100);
+
   c1->Divide(yc, xc);
   c2->Divide(yc, xc);
-
-  TCanvas *c3 = new TCanvas("c3", "SIMC Radiative Corrections", 1400,1100);
   c3->Divide(yc, xc);
+
+  
   //----------------------------
 
-  
+
+  // define 1d projection histos 
   TH1D *H_dataPm_projY = 0;
+  TH1D *H_simcPm_projY_ratio = 0; // ratio of norad/rad projected
   
+  cout << "About to loop over xbins of hist2d . . . " << endl;
+
   //loop over xbins of hist2d 
   for(int i=1; i<=nxbins; i++){
 
@@ -271,8 +340,9 @@ void project2d_deut( TH2F *hist2d=0, TString setting="", Bool_t display_plots=0,
     //cout << "bin: " << i << ", x-val: " << thrq_center << endl;
 
     // project hist2d along y-axis (different bins in x)
-    H_dataPm_projY = hist2d->ProjectionY(Form("proj_Pm_thrq%.1f", thrq_center), i, i);
-
+    H_dataPm_projY       = hist2d->ProjectionY(Form("proj_Pm_thrq%.1f", thrq_center), i, i);
+    H_simcPm_projY_ratio = hist2d_Pm_vs_thrq_simc_ratio->ProjectionY(Form("proj_ratio_simcPm_thrq%.1f", thrq_center), i, i);
+    
     // define integrated counts on projected bin
     float counts = H_dataPm_projY->Integral();
 
@@ -280,11 +350,18 @@ void project2d_deut( TH2F *hist2d=0, TString setting="", Bool_t display_plots=0,
     H_dataPm_projY->GetYaxis()->SetNdivisions(5);
     H_dataPm_projY->GetXaxis()->SetNdivisions(10);
     H_dataPm_projY->GetXaxis()->SetLabelSize(0.1);
+
+    H_simcPm_projY_ratio->GetYaxis()->SetNdivisions(5);
+    H_simcPm_projY_ratio->GetXaxis()->SetNdivisions(10);
+    H_simcPm_projY_ratio->GetXaxis()->SetLabelSize(0.1);
+
     //cout << "thrq_center, counts (v1) = " << thrq_center << ", " << counts << endl;
     H_dataPm_projY->SetTitle(Form("#theta_{rq} = %.1f#pm%.1f (N=%.1f)", thrq_center, thrq_width/2., counts));
     H_dataPm_projY->SetTitleSize(10);
 
-   
+    H_simcPm_projY_ratio->SetTitle(Form("#theta_{rq} = %.1f#pm%.1f (N=%.1f)", thrq_center, thrq_width/2., counts));
+    H_simcPm_projY_ratio->SetTitleSize(10);
+
     //cout << Form("bin#: %d,  x-center: %.1f, counts: %.3f", i, thrq_center, counts) << endl;
 
     
@@ -325,6 +402,7 @@ void project2d_deut( TH2F *hist2d=0, TString setting="", Bool_t display_plots=0,
       
     }
 
+    
     // at the end, should have vector of length N for plotting
     int n=H_dataPm_projY->GetNbinsX();
     
@@ -358,15 +436,22 @@ void project2d_deut( TH2F *hist2d=0, TString setting="", Bool_t display_plots=0,
 
 
     //---------------------------------------------------
-    
-    // change to canvas subplot of ith bin projection
-    c1->cd(i);
+
     gPad->Modified(); gPad->Update();
+
+      c3->cd(i);
+      H_simcPm_projY_ratio->DrawClone("E0");
+      H_simcPm_projY_ratio->Write();
+
+    c1->cd(i);
+    //gPad->Modified(); gPad->Update();
     H_dataPm_projY->DrawClone("histE0");
     H_dataPm_projY->Write();
-      
+        
+  
+    
     c2->cd(i);                                                                                                                                           
-    gPad->Modified(); gPad->Update();
+    //gPad->Modified(); gPad->Update();
     // draw to graph
     gr->Draw("AP");
     lo_limit->Draw();
@@ -380,43 +465,54 @@ void project2d_deut( TH2F *hist2d=0, TString setting="", Bool_t display_plots=0,
       legend->SetTextSize(0.15);
       legend->SetTextColor(kRed);
       legend->Draw();
-      /*
-      auto txt = new TPaveLabel(0.3, 0.3, 0.95, 0.95, "#pm 15 %", "br");
-      txt -> SetFillColor(0);
-      txt -> SetTextColor(kRed);
-      txt -> Draw();
-      */
     }
     
-
     gr->Write();
 
+    /*
+  c3->cd(i);
+  gPad->Modified(); gPad->Update();
+    hist2d_Pm_vs_thrq_simc_ratio->DrawClone("hist");
+    hist2d_Pm_vs_thrq_simc_ratio->Write();
+    */
+    
+    
   } // end loop over 2D xbins [th_rq]
 
+  
   // save canvas
   gStyle->SetOptStat(0);
   c0->SaveAs( fout_2dHist.Data()      );
   c1->SaveAs( fout_projHist.Data()    );
   c2->SaveAs( fout_projHistErr.Data() );
+  c3->SaveAs( fout_projsimcRadCorr.Data() );
 
   if(display_plots){
     
     //open plots with evince or any other viewer
-    //gSystem->Exec(Form("evince %s", fout_projHistErr.Data() )); 
+    /*
     gSystem->Exec(Form("evince %s", fout_2dHist.Data() ));
     gSystem->Exec(Form("evince %s", fout_projHist.Data() ));
     gSystem->Exec(Form("evince %s", fout_projHistErr.Data() )); 
+    gSystem->Exec(Form("evince %s",  fout_projsimcRadCorr.Data() ));
+    */
 
+    gSystem->Exec(Form("open %s", fout_2dHist.Data() ));
+    gSystem->Exec(Form("open %s", fout_projHist.Data() ));
+    gSystem->Exec(Form("open %s", fout_projHistErr.Data() )); 
+    gSystem->Exec(Form("open %s",  fout_projsimcRadCorr.Data() ));
+    
   }
   
 }
 
 
-void project2d_online() {
+void project2d_online_develop() {
 
-  int run_min=0;
-  int run_max=999999;
-  TString pm_setting="pm_120";
+  int run_min=20871;
+  int run_max=20871;
+  TString pm_setting="pm120";
+  /*
   cout << "" << endl;
   cout << "----------------------------------------------------------------------------" << endl;
   cout << "" << endl;
@@ -441,7 +537,7 @@ void project2d_online() {
   cin >> pm_setting;
   cout << "" << endl;
   cout << "----------------------------------------------------------------------------" << endl;
-
+  */
   // Brief: this function calls two functions described below. 
 
   
